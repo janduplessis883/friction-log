@@ -218,7 +218,7 @@ if st.session_state.selected_staff:
     with st.form(f"friction_form_{version}", clear_on_submit=True):
         # st.text_input("Date & Time", value=now, disabled=True)
         st.markdown(f":material/date_range:`{now}`")
-        target_activity = st.text_area(
+        target_activity = st.text_input(
             "Target Activity",
             placeholder="Filing DEXA scans",
             key=f"target_activity_{version}",
