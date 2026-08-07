@@ -70,10 +70,21 @@ def reset_form() -> None:
     st.session_state.form_version = st.session_state.get("form_version", 0) + 1
 
 
+def show_entry_list() -> None:
+    st.session_state.show_entries = True
+    st.session_state.selected_staff = None
+
+
+def show_input_form() -> None:
+    st.session_state.show_entries = False
+
+
 if "selected_staff" not in st.session_state:
     st.session_state.selected_staff = None
 if "form_version" not in st.session_state:
     st.session_state.form_version = 0
+if "show_entries" not in st.session_state:
+    st.session_state.show_entries = False
 
 log_df = read_log()
 delay_minutes = pd.to_numeric(log_df["delay_minutes"], errors="coerce").fillna(0)
@@ -109,8 +120,31 @@ st.sidebar.markdown("**Google Sheet**")
 st.sidebar.caption("Uses the private `gsheets` connection from `.streamlit/secrets.toml`.")
 st.sidebar.markdown("**Staff**")
 st.sidebar.caption(f"{len(STAFF_MEMBERS)} staff members configured.")
+st.sidebar.divider()
+if st.session_state.show_entries:
+    st.sidebar.button(
+        "New entry",
+        type="secondary",
+        width="stretch",
+        icon=":material/add:",
+        on_click=show_input_form,
+    )
+else:
+    st.sidebar.button(
+        "View entries",
+        type="secondary",
+        width="stretch",
+        icon=":material/table_view:",
+        on_click=show_entry_list,
+    )
 
-if not st.session_state.selected_staff:
+if st.session_state.show_entries:
+    st.subheader(":shimmer[Recorded entries]")
+    if log_df.empty:
+        st.info("No friction points recorded yet.")
+    else:
+        st.dataframe(log_df, width="stretch", hide_index=True)
+elif not st.session_state.selected_staff:
     st.html(
         """
         <style>
@@ -191,7 +225,7 @@ if not st.session_state.selected_staff:
 
 
 
-if not st.session_state.selected_staff:
+if not st.session_state.selected_staff and not st.session_state.show_entries:
     st.space(40)
     row_start = 0
     row_index = 0
@@ -209,7 +243,7 @@ if not st.session_state.selected_staff:
         if row_start < len(STAFF_MEMBERS):
             st.space(1)
 
-if st.session_state.selected_staff:
+if st.session_state.selected_staff and not st.session_state.show_entries:
     staff_member = st.session_state.selected_staff
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     version = st.session_state.form_version
