@@ -35,6 +35,44 @@ st.set_page_config(
 )
 st.logo("logo.png", size="large")
 
+
+def apply_background() -> None:
+    st.html(
+        """
+        <style>
+            [data-testid="stAppViewContainer"] {
+                background:
+                    radial-gradient(circle at 18% 24%, rgba(236, 93, 75, 0.14), transparent 28rem),
+                    radial-gradient(circle at 84% 18%, rgba(69, 155, 206, 0.12), transparent 30rem),
+                    linear-gradient(120deg, #ffffff 0%, #f7f9f7 45%, #ffffff 100%);
+                background-size: 140% 140%;
+                animation: main-background-drift 14s ease-in-out infinite;
+            }
+
+            [data-testid="stSidebar"] {
+                background: #f4f6f2;
+            }
+
+            [data-testid="stHeader"] {
+                background: transparent;
+            }
+
+            @keyframes main-background-drift {
+                0%, 100% {
+                    background-position: 0% 50%;
+                }
+                50% {
+                    background-position: 100% 50%;
+                }
+            }
+        </style>
+        """
+    )
+
+
+apply_background()
+
+
 def empty_log() -> pd.DataFrame:
     return pd.DataFrame(columns=COLUMNS)
 
@@ -153,7 +191,7 @@ elif not st.session_state.selected_staff:
                 background: linear-gradient(105deg, #101c28 0%, #101c28 48%, #344451 68%, #101c28 100%);
                 background-size: 180% 180%;
                 border: 1px solid transparent;
-                border-radius: 10px;
+                border-radius: 25px;
                 box-shadow: 0 26px 42px rgba(12, 23, 34, 0.14);
                 color: #ffffff;
                 margin-bottom: 1.6rem;
@@ -170,10 +208,10 @@ elif not st.session_state.selected_staff:
             .main-title-kicker {
                 color: rgba(255, 255, 255, 0.82);
                 font-size: 0.95rem;
-                font-weight: 700;
+                font-weight: 400;
                 letter-spacing: 0.12em;
                 margin: 0 0 0.7rem;
-                text-transform: uppercase;
+
             }
 
             .main-title-text {
@@ -254,7 +292,7 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         st.markdown(f":material/date_range:`{now}`")
         target_activity = st.text_input(
             "Target Activity",
-            placeholder="Filing DEXA scans",
+            placeholder="Multiple pts info in one pdf.",
             key=f"target_activity_{version}",
         )
         friction_point = st.text_area(
