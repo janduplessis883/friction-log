@@ -226,7 +226,7 @@ elif not st.session_state.selected_staff:
 
 
 if not st.session_state.selected_staff and not st.session_state.show_entries:
-    st.space(40)
+    st.space(30)
     row_start = 0
     row_index = 0
     while row_start < len(STAFF_MEMBERS):
