@@ -36,41 +36,6 @@ st.set_page_config(
 st.logo("logo.png", size="large")
 
 
-def apply_background() -> None:
-    st.html(
-        """
-        <style>
-            [data-testid="stAppViewContainer"] {
-                background:
-                    radial-gradient(circle at 18% 24%, rgba(236, 93, 75, 0.14), transparent 28rem),
-                    radial-gradient(circle at 84% 18%, rgba(69, 155, 206, 0.12), transparent 30rem),
-                    linear-gradient(120deg, #ffffff 0%, #f7f9f7 45%, #ffffff 100%);
-                background-size: 140% 140%;
-                animation: main-background-drift 14s ease-in-out infinite;
-            }
-
-            [data-testid="stSidebar"] {
-                background: #f4f6f2;
-            }
-
-            [data-testid="stHeader"] {
-                background: transparent;
-            }
-
-            @keyframes main-background-drift {
-                0%, 100% {
-                    background-position: 0% 50%;
-                }
-                50% {
-                    background-position: 100% 50%;
-                }
-            }
-        </style>
-        """
-    )
-
-
-apply_background()
 
 
 def empty_log() -> pd.DataFrame:
