@@ -27,13 +27,37 @@ COLUMNS = [
 
 BUTTON_ROW_PATTERN = [4, 3]
 
+FIELD_HELP = {
+    "recorded_at": (
+        ""
+    ),
+    "target_activity": (
+        "Describe the task you were trying to complete. Keep it specific enough "
+        "that someone else can understand the workflow, for example: scanning a "
+        "referral, booking an appointment, or updating patient records."
+    ),
+    "friction_point": (
+        "Explain what got in the way. Include the system, step, message, missing "
+        "information, or handoff that made the task harder than expected."
+    ),
+    "delay_minutes": (
+        "Estimate the extra time this caused. Use 0 minutes if it was annoying "
+        "but did not noticeably delay the task."
+    ),
+    "suggested_improvement": (
+        "Suggest what would make this easier next time. This can be a process "
+        "change, template, training note, system setting, or anything else that "
+        "would reduce the friction."
+    ),
+}
+
 
 st.set_page_config(
     page_title="Friction Log",
     page_icon="",
     layout="centered",
 )
-st.logo("logo.png", size="large")
+st.logo("logo3.png", size="large")
 
 
 
@@ -255,26 +279,31 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
     with st.form(f"friction_form_{version}", clear_on_submit=True):
         # st.text_input("Date & Time", value=now, disabled=True)
         st.markdown(f":material/date_range:`{now}`")
+        st.caption(FIELD_HELP["recorded_at"])
         target_activity = st.text_input(
-            "Target Activity",
+            "**Target Activity**",
             placeholder="Multiple pts info in one pdf.",
+            help=FIELD_HELP["target_activity"],
             key=f"target_activity_{version}",
         )
         friction_point = st.text_area(
-            "Obstacle / Friction Point",
+            "**Obstacle / Friction Point**",
             placeholder="System auto-attached 3 patient files together",
+            help=FIELD_HELP["friction_point"],
             key=f"friction_point_{version}",
         )
         delay = st.selectbox(
-            "Delay Time",
+            "**Delay Time**",
             options=list(range(0, 125, 5)),
             format_func=lambda minutes: f"{minutes} mins",
             index=3,
+            help=FIELD_HELP["delay_minutes"],
             key=f"delay_{version}",
         )
         suggested_improvement = st.text_area(
-            "Suggested Improvement",
-            placeholder="Seperate pages in document management before filling.",
+            "**Suggested Improvement**",
+            placeholder="Separate pages in document management before filling.",
+            help=FIELD_HELP["suggested_improvement"],
             key=f"suggested_improvement_{version}",
         )
 
