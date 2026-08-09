@@ -262,7 +262,7 @@ if not st.session_state.selected_staff and not st.session_state.show_entries:
         row = st.columns(buttons_in_row)
         for column, member in zip(row, row_members):
             with column:
-                if st.button(member, type="primary", width="stretch", icon=":material/person:"):
+                if st.button(f"**{member}**", type="primary", width="stretch", icon=":material/person:"):
                     st.session_state.selected_staff = member
                     st.rerun()
         row_start += buttons_in_row
