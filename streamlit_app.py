@@ -175,6 +175,60 @@ elif not st.session_state.selected_staff:
     st.html(
         """
         <style>
+            [data-testid="stAppViewContainer"] {
+                background: #ffffff;
+            }
+
+            [data-testid="stAppViewContainer"] > .main {
+                background: transparent;
+            }
+
+            .block-container {
+                position: relative;
+                z-index: 1;
+            }
+
+            [data-testid="stButton"] {
+                position: relative;
+                z-index: 3;
+            }
+
+            .main-animated-bg {
+                inset: 0;
+                overflow: hidden;
+                pointer-events: none;
+                position: fixed;
+                z-index: 2;
+            }
+
+            .floating-fl {
+                animation: fl-drift-a 28s ease-in-out infinite;
+                color: #b8bec5;
+                font-size: 1.15rem;
+                font-weight: 900;
+                line-height: 1;
+                opacity: 0.36;
+                position: absolute;
+                transform: translate3d(0, 0, 0) scale(var(--figure-scale, 1));
+                user-select: none;
+                white-space: nowrap;
+            }
+
+            .floating-fl:nth-child(1) { left: 8%; top: 12%; animation-duration: 31s; animation-delay: -7s; }
+            .floating-fl:nth-child(2) { left: 18%; top: 74%; animation-delay: -13s; animation-duration: 24s; animation-name: fl-drift-b; --figure-scale: 0.78; }
+            .floating-fl:nth-child(3) { left: 28%; top: 30%; animation-delay: -20s; animation-duration: 35s; animation-name: fl-drift-c; --figure-scale: 0.9; }
+            .floating-fl:nth-child(4) { left: 36%; top: 88%; animation-delay: -3s; animation-duration: 27s; animation-name: fl-drift-b; --figure-scale: 0.72; }
+            .floating-fl:nth-child(5) { left: 48%; top: 18%; animation-delay: -16s; animation-duration: 33s; animation-name: fl-drift-c; --figure-scale: 0.84; }
+            .floating-fl:nth-child(6) { left: 57%; top: 64%; animation-delay: -22s; animation-duration: 29s; --figure-scale: 0.68; }
+            .floating-fl:nth-child(7) { left: 67%; top: 36%; animation-delay: -11s; animation-duration: 26s; animation-name: fl-drift-b; --figure-scale: 0.82; }
+            .floating-fl:nth-child(8) { left: 76%; top: 82%; animation-delay: -24s; animation-duration: 37s; animation-name: fl-drift-c; --figure-scale: 0.74; }
+            .floating-fl:nth-child(9) { left: 86%; top: 22%; animation-delay: -5s; animation-duration: 30s; --figure-scale: 0.88; }
+            .floating-fl:nth-child(10) { left: 94%; top: 58%; animation-delay: -18s; animation-duration: 34s; animation-name: fl-drift-b; --figure-scale: 0.7; }
+            .floating-fl:nth-child(11) { left: 12%; top: 46%; animation-delay: -27s; animation-duration: 32s; animation-name: fl-drift-c; --figure-scale: 0.66; }
+            .floating-fl:nth-child(12) { left: 42%; top: 52%; animation-delay: -9s; animation-duration: 25s; --figure-scale: 0.8; }
+            .floating-fl:nth-child(13) { left: 72%; top: 8%; animation-delay: -15s; animation-duration: 36s; animation-name: fl-drift-b; --figure-scale: 0.62; }
+            .floating-fl:nth-child(14) { left: 90%; top: 92%; animation-delay: -1s; animation-duration: 28s; animation-name: fl-drift-c; --figure-scale: 0.76; }
+
             .main-title-banner {
                 animation: banner-rise 520ms ease-out both, banner-glow 7s ease-in-out infinite;
                 background: linear-gradient(105deg, #101c28 0%, #101c28 48%, #344451 68%, #101c28 100%);
@@ -185,7 +239,9 @@ elif not st.session_state.selected_staff:
                 color: #ffffff;
                 margin-bottom: 1.6rem;
                 padding: 2rem 2rem;
+                position: relative;
                 transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+                z-index: 3;
             }
 
             .main-title-banner:hover {
@@ -242,7 +298,74 @@ elif not st.session_state.selected_staff:
                     transform: translateX(0);
                 }
             }
+
+            @keyframes fl-drift-a {
+                0% {
+                    transform: translate3d(-8px, 0, 0) rotate(-7deg) scale(var(--figure-scale, 1));
+                }
+                25% {
+                    transform: translate3d(24px, -32px, 0) rotate(6deg) scale(var(--figure-scale, 1));
+                }
+                50% {
+                    transform: translate3d(58px, 8px, 0) rotate(-4deg) scale(var(--figure-scale, 1));
+                }
+                75% {
+                    transform: translate3d(18px, 34px, 0) rotate(8deg) scale(var(--figure-scale, 1));
+                }
+                100% {
+                    transform: translate3d(-8px, 0, 0) rotate(-7deg) scale(var(--figure-scale, 1));
+                }
+            }
+
+            @keyframes fl-drift-b {
+                0% {
+                    transform: translate3d(0, 0, 0) rotate(8deg) scale(var(--figure-scale, 1));
+                }
+                30% {
+                    transform: translate3d(-36px, 18px, 0) rotate(-5deg) scale(var(--figure-scale, 1));
+                }
+                60% {
+                    transform: translate3d(18px, -42px, 0) rotate(10deg) scale(var(--figure-scale, 1));
+                }
+                100% {
+                    transform: translate3d(0, 0, 0) rotate(8deg) scale(var(--figure-scale, 1));
+                }
+            }
+
+            @keyframes fl-drift-c {
+                0% {
+                    transform: translate3d(0, 0, 0) rotate(-3deg) scale(var(--figure-scale, 1));
+                }
+                20% {
+                    transform: translate3d(26px, 30px, 0) rotate(12deg) scale(var(--figure-scale, 1));
+                }
+                55% {
+                    transform: translate3d(-28px, -18px, 0) rotate(-11deg) scale(var(--figure-scale, 1));
+                }
+                80% {
+                    transform: translate3d(44px, -38px, 0) rotate(4deg) scale(var(--figure-scale, 1));
+                }
+                100% {
+                    transform: translate3d(0, 0, 0) rotate(-3deg) scale(var(--figure-scale, 1));
+                }
+            }
         </style>
+        <div class="main-animated-bg" aria-hidden="true">
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+            <span class="floating-fl">FL</span>
+        </div>
         <div class="main-title-banner">
             <p class="main-title-kicker">Workflow Intelligence</p>
             <h1 class="main-title-text">Friction Log</h1>
@@ -308,12 +431,13 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         )
 
         submitted = st.form_submit_button(
-            "Submit friction point",
+            "**Submit friction point**",
             type="primary",
             use_container_width=True,
+            icon=":material/upload:",
         )
 
-    cancel = st.button("Cancel entry", use_container_width=True)
+    cancel = st.button("Cancel entry", use_container_width=True, icon=":material/cancel:")
 
     if cancel:
         reset_form()
