@@ -88,6 +88,7 @@ def empty_log() -> pd.DataFrame:
 def read_log() -> pd.DataFrame:
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
+        migrate_sheet_layout(conn.client._select_worksheet())
         data = conn.read(ttl=0)
     except Exception:
         return empty_log()
@@ -115,20 +116,88 @@ def read_log() -> pd.DataFrame:
 def append_log_entry(entry: dict) -> None:
     conn = st.connection("gsheets", type=GSheetsConnection)
 
-    # The connection package's public update() method clears and rewrites the
-    # worksheet. Use the configured gspread worksheet directly so each entry
-    # is added as one new row instead.
     worksheet = conn.client._select_worksheet()
-    headers = worksheet.row_values(1)
-    for column_index, column_name in enumerate(COLUMNS, start=1):
-        if column_index > len(headers) or not str(headers[column_index - 1]).strip():
-            worksheet.update_cell(1, column_index, column_name)
+
+    # The sheet previously used a 9-column layout without target_activity.
+    # Migrate that layout before appending so old rows remain meaningful and
+    # new rows cannot be written under stale or duplicate headers.
+    migrate_sheet_layout(worksheet)
+
+    # Use the configured gspread worksheet directly so each entry is added as
+    # one new row instead of clearing and rewriting the worksheet on every save.
     worksheet.append_rows(
         [[entry[column] for column in COLUMNS]],
         value_input_option="USER_ENTERED",
         insert_data_option="INSERT_ROWS",
     )
     read_log.clear()
+
+
+def migrate_sheet_layout(worksheet) -> None:
+    expected_headers = COLUMNS
+    rows = worksheet.get_all_values()
+    if not rows or not any(str(value).strip() for value in rows[0]):
+        worksheet.update(
+            range_name="A1:J1",
+            values=[expected_headers],
+            value_input_option="USER_ENTERED",
+        )
+        return
+
+    headers = [str(value).strip() for value in rows[0]]
+    if headers == expected_headers:
+        return
+
+    normalized_rows = [expected_headers]
+    for raw_row in rows[1:]:
+        values = list(raw_row) + [""] * (10 - len(raw_row))
+        values = values[:10]
+        if not any(str(value).strip() for value in values):
+            continue
+
+        # Rows from the old schema have numeric activity_count and delay values
+        # in columns D and F. Rows written by the current app have activity_count
+        # and delay in columns E and G, even when their header was stale.
+        if _is_number(values[3]) and _is_number(values[5]):
+            normalized_rows.append(
+                [
+                    values[0],
+                    values[1],
+                    values[2],
+                    "",
+                    values[3],
+                    values[4],
+                    values[5],
+                    values[6],
+                    values[7],
+                    values[8],
+                ]
+            )
+        else:
+            normalized_rows.append(values)
+
+    worksheet.update(
+        range_name=f"A1:J{len(normalized_rows)}",
+        values=normalized_rows,
+        value_input_option="USER_ENTERED",
+    )
+
+
+def _is_number(value: str) -> bool:
+    try:
+        float(str(value).strip())
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _minutes_series(values: pd.Series) -> pd.Series:
+    # Google Sheets can return numeric cells as strings, or as display text
+    # such as "20 mins". Extract the numeric portion before summing.
+    numeric_values = values.astype("string").str.replace(",", "", regex=False).str.extract(
+        r"([-+]?\d+(?:\.\d+)?)", expand=False
+    )
+    return pd.to_numeric(numeric_values, errors="coerce").fillna(0)
 
 
 def reset_form() -> None:
@@ -144,7 +213,7 @@ if "show_entries" not in st.session_state:
     st.session_state.show_entries = False
 
 log_df = read_log()
-delay_minutes = pd.to_numeric(log_df["delay_minutes"], errors="coerce").fillna(0)
+delay_minutes = _minutes_series(log_df["delay_minutes"])
 
 # st.sidebar.html(
 #     """
