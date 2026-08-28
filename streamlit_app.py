@@ -22,13 +22,22 @@ COLUMNS = [
     "entry_type",
     "target_activity",
     "activity_count",
-    "minutes_spent",
     "friction_point",
     "delay_minutes",
     "suggested_improvement",
+    "break_type",
+    "break_note",
 ]
 
-ENTRY_TYPES = ["Work activity", "Friction point"]
+ENTRY_TYPES = ["Work activity", "Friction point", "Break"]
+BREAK_TYPES = [
+    "Lunch",
+    "Scheduled break",
+    "Unscheduled break",
+    "Personal break",
+    "Comfort break",
+    "Other",
+]
 
 BUTTON_ROW_PATTERN = [4, 3]
 
@@ -44,9 +53,6 @@ FIELD_HELP = {
     "activity_count": (
         "Use this when one entry represents a batch, such as processing 12 forms."
     ),
-    "minutes_spent": (
-        "Optional: record the approximate time spent on the activity."
-    ),
     "friction_point": (
         "Explain what got in the way. Include the system, step, message, missing "
         "information, or handoff that made the task harder than expected."
@@ -60,6 +66,7 @@ FIELD_HELP = {
         "change, template, training note, system setting, or anything else that "
         "would reduce the friction."
     ),
+    "break_note": "Optional: add context about the break or what prompted it.",
 }
 
 
@@ -112,6 +119,10 @@ def append_log_entry(entry: dict) -> None:
     # worksheet. Use the configured gspread worksheet directly so each entry
     # is added as one new row instead.
     worksheet = conn.client._select_worksheet()
+    headers = worksheet.row_values(1)
+    for column_index, column_name in enumerate(COLUMNS, start=1):
+        if column_index > len(headers) or not str(headers[column_index - 1]).strip():
+            worksheet.update_cell(1, column_index, column_name)
     worksheet.append_rows(
         [[entry[column] for column in COLUMNS]],
         value_input_option="USER_ENTERED",
@@ -166,6 +177,10 @@ st.sidebar.metric(
     f"{(log_df['entry_type'] == 'Friction point').sum()}",
 )
 st.sidebar.metric(
+    "Breaks recorded",
+    f"{(log_df['entry_type'] == 'Break').sum()}",
+)
+st.sidebar.metric(
     "Total delay time identified",
     f"{int(delay_minutes.sum())} mins",
 )
@@ -187,10 +202,11 @@ if st.session_state.show_entries:
                 "entry_type": "Entry type",
                 "target_activity": "Activity",
                 "activity_count": "Count",
-                "minutes_spent": "Minutes spent",
                 "friction_point": "Friction point",
                 "delay_minutes": "Delay minutes",
                 "suggested_improvement": "Suggested improvement",
+                "break_type": "Break type",
+                "break_note": "Break note",
             }
         )
         st.dataframe(display_df, width="stretch", hide_index=True)
@@ -233,6 +249,15 @@ elif not st.session_state.selected_staff:
                 top: 50%;
                 transform: translateY(0);
                 width: 92%;
+            }
+
+            .moving-line.line-two {
+                animation-duration: 23s;
+                animation-delay: -8s;
+                background: rgba(236, 93, 75, 0.22);
+                left: 9%;
+                top: 62%;
+                width: 82%;
             }
 
             .main-title-banner {
@@ -328,6 +353,7 @@ elif not st.session_state.selected_staff:
         </style>
         <div class="main-animated-bg" aria-hidden="true">
             <span class="moving-line"></span>
+            <span class="moving-line line-two"></span>
         </div>
         <div class="main-title-banner">
             <p class="main-title-kicker">Workflow Intelligence</p>
@@ -372,12 +398,15 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         # st.text_input("Date & Time", value=now, disabled=True)
         st.markdown(f":material/date_range:`{now}`")
         st.caption(FIELD_HELP["recorded_at"])
-        target_activity = st.text_input(
-            "**Activity**",
-            placeholder="Process referral forms",
-            help=FIELD_HELP["target_activity"],
-            key=f"target_activity_{version}",
-        )
+        if entry_type == "Break":
+            target_activity = ""
+        else:
+            target_activity = st.text_input(
+                "**Activity**",
+                placeholder="Process referral forms",
+                help=FIELD_HELP["target_activity"],
+                key=f"target_activity_{version}",
+            )
         if entry_type == "Work activity":
             activity_count = st.number_input(
                 "**Number completed**",
@@ -387,20 +416,14 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
                 help=FIELD_HELP["activity_count"],
                 key=f"activity_count_{version}",
             )
-            minutes_spent = st.number_input(
-                "**Minutes spent (optional)**",
-                min_value=0,
-                value=0,
-                step=5,
-                help=FIELD_HELP["minutes_spent"],
-                key=f"minutes_spent_{version}",
-            )
             friction_point = ""
             delay = 0
             suggested_improvement = ""
-        else:
+            break_type = ""
+            break_minutes = 0
+            break_note = ""
+        elif entry_type == "Friction point":
             activity_count = 1
-            minutes_spent = 0
             friction_point = st.text_area(
                 "**Obstacle / friction point**",
                 placeholder="System auto-attached 3 patient files together",
@@ -421,6 +444,27 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
                 help=FIELD_HELP["suggested_improvement"],
                 key=f"suggested_improvement_{version}",
             )
+            break_type = ""
+            break_minutes = 0
+            break_note = ""
+        else:
+            activity_count = 0
+            minutes_spent = 0
+            break_type = st.selectbox(
+                "**Break type**",
+                options=BREAK_TYPES,
+                help="Choose the kind of break you are recording.",
+                key=f"break_type_{version}",
+            )
+            break_note = st.text_area(
+                "**Note (optional)**",
+                placeholder="Stepped away for a quick reset.",
+                help=FIELD_HELP["break_note"],
+                key=f"break_note_{version}",
+            )
+            friction_point = ""
+            delay = 0
+            suggested_improvement = ""
 
         submitted = st.form_submit_button(
             f"**Record {entry_type.lower() if entry_type else 'entry'}**",
@@ -439,7 +483,7 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         missing_fields = [
             label
             for label, value in {
-                "Activity": target_activity,
+                **({"Activity": target_activity} if entry_type != "Break" else {}),
                 **(
                     {
                         "Obstacle / Friction Point": friction_point,
@@ -463,10 +507,11 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
                         "entry_type": entry_type,
                         "target_activity": target_activity.strip(),
                         "activity_count": int(activity_count),
-                        "minutes_spent": int(minutes_spent),
                         "friction_point": friction_point.strip(),
                         "delay_minutes": int(delay),
                         "suggested_improvement": suggested_improvement.strip(),
+                        "break_type": break_type,
+                        "break_note": break_note.strip(),
                     }
                 )
             except Exception as exc:
