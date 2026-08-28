@@ -107,9 +107,16 @@ def read_log() -> pd.DataFrame:
 
 def append_log_entry(entry: dict) -> None:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    existing = read_log()
-    updated = pd.concat([existing, pd.DataFrame([entry])], ignore_index=True)
-    conn.update(data=updated)
+
+    # The connection package's public update() method clears and rewrites the
+    # worksheet. Use the configured gspread worksheet directly so each entry
+    # is added as one new row instead.
+    worksheet = conn.client._select_worksheet()
+    worksheet.append_rows(
+        [[entry[column] for column in COLUMNS]],
+        value_input_option="USER_ENTERED",
+        insert_data_option="INSERT_ROWS",
+    )
     read_log.clear()
 
 
