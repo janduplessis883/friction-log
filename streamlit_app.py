@@ -19,11 +19,16 @@ STAFF_MEMBERS = [
 COLUMNS = [
     "recorded_at",
     "staff_member",
+    "entry_type",
     "target_activity",
+    "activity_count",
+    "minutes_spent",
     "friction_point",
     "delay_minutes",
     "suggested_improvement",
 ]
+
+ENTRY_TYPES = ["Work activity", "Friction point"]
 
 BUTTON_ROW_PATTERN = [4, 3]
 
@@ -32,9 +37,15 @@ FIELD_HELP = {
         ""
     ),
     "target_activity": (
-        "Describe the task you were trying to complete. Keep it specific enough "
+        "Describe the task completed or attempted. Keep it specific enough "
         "that someone else can understand the workflow, for example: scanning a "
         "referral, booking an appointment, or updating patient records."
+    ),
+    "activity_count": (
+        "Use this when one entry represents a batch, such as processing 12 forms."
+    ),
+    "minutes_spent": (
+        "Optional: record the approximate time spent on the activity."
     ),
     "friction_point": (
         "Explain what got in the way. Include the system, step, message, missing "
@@ -53,7 +64,7 @@ FIELD_HELP = {
 
 
 st.set_page_config(
-    page_title="Friction Log",
+    page_title="Activity / Friction Log",
     page_icon="",
     layout="centered",
 )
@@ -81,6 +92,16 @@ def read_log() -> pd.DataFrame:
         if column not in data.columns:
             data[column] = None
 
+    # Keep existing friction rows meaningful after the sheet gains the new
+    # activity fields.
+    entry_type = data["entry_type"].fillna("").astype(str).str.strip()
+    data["entry_type"] = entry_type.where(
+        entry_type.isin(ENTRY_TYPES),
+        data["friction_point"].fillna("").astype(str).str.strip().map(
+            lambda value: "Friction point" if value else "Work activity"
+        ),
+    )
+
     return data[COLUMNS]
 
 
@@ -95,15 +116,6 @@ def append_log_entry(entry: dict) -> None:
 def reset_form() -> None:
     st.session_state.selected_staff = None
     st.session_state.form_version = st.session_state.get("form_version", 0) + 1
-
-
-def show_entry_list() -> None:
-    st.session_state.show_entries = True
-    st.session_state.selected_staff = None
-
-
-def show_input_form() -> None:
-    st.session_state.show_entries = False
 
 
 if "selected_staff" not in st.session_state:
@@ -135,8 +147,16 @@ delay_minutes = pd.to_numeric(log_df["delay_minutes"], errors="coerce").fillna(0
 # )
 
 st.sidebar.metric(
-    "Friction points recorded",
-    f"{len(log_df)} points",
+    "Entries recorded",
+    f"{len(log_df)}",
+)
+st.sidebar.metric(
+    "Work activities",
+    f"{(log_df['entry_type'] == 'Work activity').sum()}",
+)
+st.sidebar.metric(
+    "Friction points",
+    f"{(log_df['entry_type'] == 'Friction point').sum()}",
 )
 st.sidebar.metric(
     "Total delay time identified",
@@ -147,30 +167,26 @@ st.sidebar.markdown("**Google Sheet**")
 st.sidebar.caption("Uses the private `gsheets` connection from `.streamlit/secrets.toml`.")
 st.sidebar.markdown("**Staff**")
 st.sidebar.caption(f"{len(STAFF_MEMBERS)} staff members configured.")
-st.sidebar.divider()
-if st.session_state.show_entries:
-    st.sidebar.button(
-        "New entry",
-        type="secondary",
-        width="stretch",
-        icon=":material/add:",
-        on_click=show_input_form,
-    )
-else:
-    st.sidebar.button(
-        "View entries",
-        type="secondary",
-        width="stretch",
-        icon=":material/table_view:",
-        on_click=show_entry_list,
-    )
 
 if st.session_state.show_entries:
     st.subheader(":shimmer[Recorded entries]")
     if log_df.empty:
-        st.info("No friction points recorded yet.")
+        st.info("No entries recorded yet.")
     else:
-        st.dataframe(log_df, width="stretch", hide_index=True)
+        display_df = log_df.rename(
+            columns={
+                "recorded_at": "Recorded at",
+                "staff_member": "Staff member",
+                "entry_type": "Entry type",
+                "target_activity": "Activity",
+                "activity_count": "Count",
+                "minutes_spent": "Minutes spent",
+                "friction_point": "Friction point",
+                "delay_minutes": "Delay minutes",
+                "suggested_improvement": "Suggested improvement",
+            }
+        )
+        st.dataframe(display_df, width="stretch", hide_index=True)
 elif not st.session_state.selected_staff:
     st.html(
         """
@@ -201,33 +217,16 @@ elif not st.session_state.selected_staff:
                 z-index: 2;
             }
 
-            .floating-fl {
-                animation: fl-drift-a 28s ease-in-out infinite;
-                color: #b8bec5;
-                font-size: 1.15rem;
-                font-weight: 900;
-                line-height: 1;
-                opacity: 0.36;
+            .moving-line {
+                animation: line-drift 17s ease-in-out infinite;
+                background: rgba(120, 128, 136, 0.28);
+                height: 1px;
+                left: 4%;
                 position: absolute;
-                transform: translate3d(0, 0, 0) scale(var(--figure-scale, 1));
-                user-select: none;
-                white-space: nowrap;
+                top: 50%;
+                transform: translateY(0);
+                width: 92%;
             }
-
-            .floating-fl:nth-child(1) { left: 8%; top: 12%; animation-duration: 31s; animation-delay: -7s; }
-            .floating-fl:nth-child(2) { left: 18%; top: 74%; animation-delay: -13s; animation-duration: 24s; animation-name: fl-drift-b; --figure-scale: 0.78; }
-            .floating-fl:nth-child(3) { left: 28%; top: 30%; animation-delay: -20s; animation-duration: 35s; animation-name: fl-drift-c; --figure-scale: 0.9; }
-            .floating-fl:nth-child(4) { left: 36%; top: 88%; animation-delay: -3s; animation-duration: 27s; animation-name: fl-drift-b; --figure-scale: 0.72; }
-            .floating-fl:nth-child(5) { left: 48%; top: 18%; animation-delay: -16s; animation-duration: 33s; animation-name: fl-drift-c; --figure-scale: 0.84; }
-            .floating-fl:nth-child(6) { left: 57%; top: 64%; animation-delay: -22s; animation-duration: 29s; --figure-scale: 0.68; }
-            .floating-fl:nth-child(7) { left: 67%; top: 36%; animation-delay: -11s; animation-duration: 26s; animation-name: fl-drift-b; --figure-scale: 0.82; }
-            .floating-fl:nth-child(8) { left: 76%; top: 82%; animation-delay: -24s; animation-duration: 37s; animation-name: fl-drift-c; --figure-scale: 0.74; }
-            .floating-fl:nth-child(9) { left: 86%; top: 22%; animation-delay: -5s; animation-duration: 30s; --figure-scale: 0.88; }
-            .floating-fl:nth-child(10) { left: 94%; top: 58%; animation-delay: -18s; animation-duration: 34s; animation-name: fl-drift-b; --figure-scale: 0.7; }
-            .floating-fl:nth-child(11) { left: 12%; top: 46%; animation-delay: -27s; animation-duration: 32s; animation-name: fl-drift-c; --figure-scale: 0.66; }
-            .floating-fl:nth-child(12) { left: 42%; top: 52%; animation-delay: -9s; animation-duration: 25s; --figure-scale: 0.8; }
-            .floating-fl:nth-child(13) { left: 72%; top: 8%; animation-delay: -15s; animation-duration: 36s; animation-name: fl-drift-b; --figure-scale: 0.62; }
-            .floating-fl:nth-child(14) { left: 90%; top: 92%; animation-delay: -1s; animation-duration: 28s; animation-name: fl-drift-c; --figure-scale: 0.76; }
 
             .main-title-banner {
                 animation: banner-rise 520ms ease-out both, banner-glow 7s ease-in-out infinite;
@@ -299,76 +298,33 @@ elif not st.session_state.selected_staff:
                 }
             }
 
-            @keyframes fl-drift-a {
+            @keyframes line-drift {
                 0% {
-                    transform: translate3d(-8px, 0, 0) rotate(-7deg) scale(var(--figure-scale, 1));
+                    transform: translateY(-23vh);
                 }
-                25% {
-                    transform: translate3d(24px, -32px, 0) rotate(6deg) scale(var(--figure-scale, 1));
+                19% {
+                    transform: translateY(11vh);
                 }
-                50% {
-                    transform: translate3d(58px, 8px, 0) rotate(-4deg) scale(var(--figure-scale, 1));
+                43% {
+                    transform: translateY(-7vh);
                 }
-                75% {
-                    transform: translate3d(18px, 34px, 0) rotate(8deg) scale(var(--figure-scale, 1));
+                67% {
+                    transform: translateY(25vh);
+                }
+                84% {
+                    transform: translateY(-14vh);
                 }
                 100% {
-                    transform: translate3d(-8px, 0, 0) rotate(-7deg) scale(var(--figure-scale, 1));
-                }
-            }
-
-            @keyframes fl-drift-b {
-                0% {
-                    transform: translate3d(0, 0, 0) rotate(8deg) scale(var(--figure-scale, 1));
-                }
-                30% {
-                    transform: translate3d(-36px, 18px, 0) rotate(-5deg) scale(var(--figure-scale, 1));
-                }
-                60% {
-                    transform: translate3d(18px, -42px, 0) rotate(10deg) scale(var(--figure-scale, 1));
-                }
-                100% {
-                    transform: translate3d(0, 0, 0) rotate(8deg) scale(var(--figure-scale, 1));
-                }
-            }
-
-            @keyframes fl-drift-c {
-                0% {
-                    transform: translate3d(0, 0, 0) rotate(-3deg) scale(var(--figure-scale, 1));
-                }
-                20% {
-                    transform: translate3d(26px, 30px, 0) rotate(12deg) scale(var(--figure-scale, 1));
-                }
-                55% {
-                    transform: translate3d(-28px, -18px, 0) rotate(-11deg) scale(var(--figure-scale, 1));
-                }
-                80% {
-                    transform: translate3d(44px, -38px, 0) rotate(4deg) scale(var(--figure-scale, 1));
-                }
-                100% {
-                    transform: translate3d(0, 0, 0) rotate(-3deg) scale(var(--figure-scale, 1));
+                    transform: translateY(-23vh);
                 }
             }
         </style>
         <div class="main-animated-bg" aria-hidden="true">
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
-            <span class="floating-fl">FL</span>
+            <span class="moving-line"></span>
         </div>
         <div class="main-title-banner">
             <p class="main-title-kicker">Workflow Intelligence</p>
-            <h1 class="main-title-text">Friction Log</h1>
+            <h1 class="main-title-text">Activity / Friction Log</h1>
         </div>
         """
     )
@@ -399,45 +355,74 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
     version = st.session_state.form_version
 
     st.subheader(f":shimmer[Entry for {staff_member}]")
+    entry_type = st.segmented_control(
+        "What are you recording?",
+        options=ENTRY_TYPES,
+        default=ENTRY_TYPES[0],
+        key=f"entry_type_{version}",
+    )
     with st.form(f"friction_form_{version}", clear_on_submit=True):
         # st.text_input("Date & Time", value=now, disabled=True)
         st.markdown(f":material/date_range:`{now}`")
         st.caption(FIELD_HELP["recorded_at"])
         target_activity = st.text_input(
-            "**Target Activity**",
-            placeholder="Multiple pts info in one pdf.",
+            "**Activity**",
+            placeholder="Process referral forms",
             help=FIELD_HELP["target_activity"],
             key=f"target_activity_{version}",
         )
-        friction_point = st.text_area(
-            "**Obstacle / Friction Point**",
-            placeholder="System auto-attached 3 patient files together",
-            help=FIELD_HELP["friction_point"],
-            key=f"friction_point_{version}",
-        )
-        delay = st.selectbox(
-            "**Delay Time**",
-            options=list(range(0, 125, 5)),
-            format_func=lambda minutes: f"{minutes} mins",
-            index=3,
-            help=FIELD_HELP["delay_minutes"],
-            key=f"delay_{version}",
-        )
-        suggested_improvement = st.text_area(
-            "**Suggested Improvement**",
-            placeholder="Separate pages in document management before filling.",
-            help=FIELD_HELP["suggested_improvement"],
-            key=f"suggested_improvement_{version}",
-        )
+        if entry_type == "Work activity":
+            activity_count = st.number_input(
+                "**Number completed**",
+                min_value=1,
+                value=1,
+                step=1,
+                help=FIELD_HELP["activity_count"],
+                key=f"activity_count_{version}",
+            )
+            minutes_spent = st.number_input(
+                "**Minutes spent (optional)**",
+                min_value=0,
+                value=0,
+                step=5,
+                help=FIELD_HELP["minutes_spent"],
+                key=f"minutes_spent_{version}",
+            )
+            friction_point = ""
+            delay = 0
+            suggested_improvement = ""
+        else:
+            activity_count = 1
+            minutes_spent = 0
+            friction_point = st.text_area(
+                "**Obstacle / friction point**",
+                placeholder="System auto-attached 3 patient files together",
+                help=FIELD_HELP["friction_point"],
+                key=f"friction_point_{version}",
+            )
+            delay = st.selectbox(
+                "**Delay time**",
+                options=list(range(0, 125, 5)),
+                format_func=lambda minutes: f"{minutes} mins",
+                index=3,
+                help=FIELD_HELP["delay_minutes"],
+                key=f"delay_{version}",
+            )
+            suggested_improvement = st.text_area(
+                "**Suggested improvement**",
+                placeholder="Separate pages in document management before filling.",
+                help=FIELD_HELP["suggested_improvement"],
+                key=f"suggested_improvement_{version}",
+            )
 
         submitted = st.form_submit_button(
-            "**Submit friction point**",
+            f"**Record {entry_type.lower() if entry_type else 'entry'}**",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             icon=":material/upload:",
         )
 
-    cancel = st.button("Cancel entry", use_container_width=True, icon=":material/cancel:")
+    cancel = st.button("Cancel entry", width="stretch", icon=":material/cancel:")
 
     if cancel:
         reset_form()
@@ -447,9 +432,15 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         missing_fields = [
             label
             for label, value in {
-                "Target Activity": target_activity,
-                "Obstacle / Friction Point": friction_point,
-                "Suggested Improvement": suggested_improvement,
+                "Activity": target_activity,
+                **(
+                    {
+                        "Obstacle / Friction Point": friction_point,
+                        "Suggested Improvement": suggested_improvement,
+                    }
+                    if entry_type == "Friction point"
+                    else {}
+                ),
             }.items()
             if not value.strip()
         ]
@@ -462,7 +453,10 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
                     {
                         "recorded_at": now,
                         "staff_member": staff_member,
+                        "entry_type": entry_type,
                         "target_activity": target_activity.strip(),
+                        "activity_count": int(activity_count),
+                        "minutes_spent": int(minutes_spent),
                         "friction_point": friction_point.strip(),
                         "delay_minutes": int(delay),
                         "suggested_improvement": suggested_improvement.strip(),
@@ -475,6 +469,6 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
                 )
                 st.caption(str(exc))
             else:
-                st.success("Friction point recorded.")
+                st.success(f"{entry_type} recorded.")
                 reset_form()
                 st.rerun()
