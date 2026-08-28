@@ -12,7 +12,7 @@ STAFF_MEMBERS = [
     "Siamma",
     "Selina",
     "Helen",
-    "Ceylon",
+    "Zoe",
 
 ]
 
