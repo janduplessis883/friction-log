@@ -30,6 +30,35 @@ COLUMNS = [
 ]
 
 ENTRY_TYPES = ["Work activity", "Friction point", "Break"]
+ACTIVITY_OPTIONS = [
+    "Accounts Admin",
+    "Answering Telephone Calls",
+    "Booking Appointments",
+    "Clinical Correspondence",
+    "Facilities, Supplies and Premises Management",
+    "Handling Reception Queries",
+    "Insurance and Medical Report Requests",
+    "Loading New Appointments",
+    "Managing SystmOne Tasks",
+    "Managing Test Results",
+    "Meetings and Team Coordination",
+    "Moving Patient Appointments",
+    "Paying Bills",
+    "Prescription Administration",
+    "Prescription Requests",
+    "Processing NHS Mail",
+    "Processing Referrals",
+    "Processing Subject Access Requests",
+    "Recall and Screening Administration",
+    "Registration and Deductions",
+    "Scanning and Filing Letters",
+    "Staff Rotas",
+    "Staff Training and Onboarding",
+    "Targets Admin",
+    "Updating Patient Records",
+    "Updating or Cancelling Appointments",
+]
+ACTIVITY_OPTIONS.append("Other")
 BREAK_TYPES = [
     "Lunch",
     "Scheduled break",
@@ -46,9 +75,8 @@ FIELD_HELP = {
         ""
     ),
     "target_activity": (
-        "Describe the task completed or attempted. Keep it specific enough "
-        "that someone else can understand the workflow, for example: scanning a "
-        "referral, booking an appointment, or updating patient records."
+        "Choose a standard activity or type a custom activity. Keep it specific "
+        "enough that someone else can understand the workflow."
     ),
     "activity_count": (
         "Use this when one entry represents a batch, such as processing 12 forms."
@@ -215,6 +243,32 @@ def _minutes_series(values: pd.Series) -> pd.Series:
 def reset_form() -> None:
     st.session_state.selected_staff = None
     st.session_state.form_version = st.session_state.get("form_version", 0) + 1
+
+
+@st.fragment
+def render_activity_selector(version: int) -> None:
+    """Render the activity controls without rerunning the rest of the app."""
+    selected_activity = st.selectbox(
+        "**Activity**",
+        options=ACTIVITY_OPTIONS,
+        index=None,
+        placeholder="Choose an activity or type your own",
+        accept_new_options=True,
+        help=FIELD_HELP["target_activity"],
+        key=f"target_activity_{version}",
+    )
+    if selected_activity == "Other":
+        activity_value = st.text_input(
+            "**Describe the other activity**",
+            placeholder="Describe the activity",
+            help="Add a short description so this entry can be understood later.",
+            key=f"other_activity_{version}",
+        )
+    else:
+        activity_value = selected_activity or ""
+
+    st.session_state[f"selected_activity_{version}"] = selected_activity
+    st.session_state[f"activity_value_{version}"] = activity_value
 
 
 if "selected_staff" not in st.session_state:
@@ -475,19 +529,20 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         default=ENTRY_TYPES[0],
         key=f"entry_type_{version}",
     )
+    if entry_type == "Break":
+        selected_activity = None
+        target_activity = ""
+    else:
+        render_activity_selector(version)
+        selected_activity = st.session_state.get(f"selected_activity_{version}")
+        target_activity = st.session_state.get(f"activity_value_{version}", "")
+
     with st.form(f"friction_form_{version}", clear_on_submit=True):
         # st.text_input("Date & Time", value=now, disabled=True)
         st.markdown(f":material/date_range:`{now}`")
         st.caption(FIELD_HELP["recorded_at"])
         if entry_type == "Break":
             target_activity = ""
-        else:
-            target_activity = st.text_input(
-                "**Activity**",
-                placeholder="Process referral forms",
-                help=FIELD_HELP["target_activity"],
-                key=f"target_activity_{version}",
-            )
         if entry_type == "Work activity":
             activity_count = st.number_input(
                 "**Number completed**",
@@ -564,7 +619,15 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         missing_fields = [
             label
             for label, value in {
-                **({"Activity": target_activity} if entry_type != "Break" else {}),
+                **(
+                    {
+                        "Other activity"
+                        if selected_activity == "Other"
+                        else "Activity": target_activity
+                    }
+                    if entry_type != "Break"
+                    else {}
+                ),
                 **(
                     {
                         "Obstacle / Friction Point": friction_point,
