@@ -77,6 +77,18 @@ st.set_page_config(
 )
 st.logo("logo3.png", size="large")
 
+with st.container(horizontal=True, vertical_alignment="center"):
+    st.page_link(
+        "streamlit_app.py",
+        label="Log an entry",
+        icon=":material/edit_note:",
+    )
+    st.page_link(
+        "pages/activity.py",
+        label="Activity dashboard",
+        icon=":material/insights:",
+    )
+
 
 
 

@@ -85,3 +85,6 @@ codeBackgroundColor = "#37475A"
 textColor = "#FFFFFF"                # White text on dark
 borderColor = "#37475A"
 primaryColor = "#FF9900"             # Orange accents in sidebar
+
+[client]
+showSidebarNavigation = false
