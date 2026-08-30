@@ -1,4 +1,5 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -30,15 +31,24 @@ COLUMNS = [
 ]
 
 ENTRY_TYPES = ["Work activity", "Friction point", "Break"]
+LONDON_TZ = ZoneInfo("Europe/London")
 ACTIVITY_OPTIONS = [
     "Accounts Admin",
     "Answering Telephone Calls",
+    "Annual Leave request",
     "Booking Appointments",
+    "Cancelling Clinics",
     "Complaints Administration",
     "Clinical Correspondence",
+    "CQRS",
     "District Nurse Coordination",
     "Facilities, Supplies and Premises Management",
+    "Friends & Family Test",
+    "Flu planning",
+    "Flu - Housebound",
     "Handling Reception Queries",
+    "Immunisation Recalls",
+    "ImmForm - Ordering Imms",
     "Insurance and Medical Report Requests",
     "Loading New Appointments",
     "Managing SystmOne Tasks",
@@ -52,12 +62,16 @@ ACTIVITY_OPTIONS = [
     "Processing Personal NHS Mail",
     "Processing Surgery NHS Mail",
     "Processing Referrals",
-    "Processing Subject Access Requests",
+    "Processing Subject Access Requests (SAR)",
     "Recall and Screening Administration",
     "Registration and Deductions",
+    "Review Targets Dashboards",
     "Scanning and Filing Letters",
     "Staff Rotas",
     "Staff Training and Onboarding",
+    "Sick Leave - Receiving Call / WhatsApp",
+    "Sick Leave - Cancelling Clinics",
+    "SystmOne Searches",
     "Targets Admin",
     "Updating Patient Records",
     "Updating or Cancelling Appointments",
@@ -69,6 +83,7 @@ BREAK_TYPES = [
     "Unscheduled break",
     "Personal break",
     "Comfort break",
+    "End of working day",
     "Other",
 ]
 
@@ -430,12 +445,46 @@ elif not st.session_state.selected_staff:
             }
 
             .main-title-text {
-                animation: title-focus 560ms ease-out 120ms both;
                 color: #ffffff;
-                font-size: 3.8rem;
+                font-size: clamp(2rem, 5vw, 3.8rem);
                 font-weight: 900;
-                line-height: 0.95;
+                line-height: 1.05;
                 margin: 0;
+                min-height: 2.9em;
+                padding-bottom: 0.15em;
+            }
+
+            .message-stage {
+                box-sizing: border-box;
+                display: grid;
+                height: auto;
+                min-height: 2.9em;
+                overflow: visible;
+                padding-bottom: 0;
+                position: relative;
+            }
+
+            .hero-message {
+                animation-duration: 18s;
+                animation-iteration-count: infinite;
+                animation-timing-function: ease-in-out;
+                display: block;
+                grid-area: 1 / 1;
+                position: relative;
+                width: 100%;
+                white-space: normal;
+            }
+
+            .hero-message-title {
+                animation-name: message-title;
+            }
+
+            .hero-message-activity {
+                animation-name: message-activity;
+            }
+
+            .hero-message-break {
+                animation-name: message-break;
             }
 
             @keyframes banner-rise {
@@ -458,14 +507,68 @@ elif not st.session_state.selected_staff:
                 }
             }
 
-            @keyframes title-focus {
-                from {
+            @keyframes message-title {
+                0%, 56%, 100% {
                     opacity: 0;
-                    transform: translateX(-8px);
+                    transform: translateY(14px) scale(0.94);
+                    filter: blur(7px);
                 }
-                to {
+                5%, 48% {
                     opacity: 1;
-                    transform: translateX(0);
+                    transform: translateY(0) scale(1);
+                    filter: blur(0);
+                }
+            }
+
+            @keyframes message-activity {
+                0%, 52%, 100% {
+                    opacity: 0;
+                    transform: translateX(-24px) rotate(-2deg);
+                    filter: blur(5px);
+                }
+                58%, 71% {
+                    opacity: 1;
+                    transform: translateX(0) rotate(0);
+                    filter: blur(0);
+                }
+                78% {
+                    opacity: 0;
+                    transform: translateX(24px) rotate(2deg);
+                    filter: blur(5px);
+                }
+            }
+
+            @keyframes message-break {
+                0%, 74%, 100% {
+                    opacity: 0;
+                    transform: translateY(-16px) scale(1.12) rotate(5deg);
+                    filter: blur(6px);
+                }
+                82%, 94% {
+                    opacity: 1;
+                    transform: translateY(0) scale(1) rotate(0);
+                    filter: blur(0);
+                }
+                100% {
+                    opacity: 0;
+                    transform: translateY(16px) scale(0.92) rotate(-3deg);
+                    filter: blur(6px);
+                }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                .hero-message {
+                    animation: none;
+                }
+
+                .hero-message-title {
+                    opacity: 1;
+                    position: relative;
+                }
+
+                .hero-message-activity,
+                .hero-message-break {
+                    display: none;
                 }
             }
 
@@ -496,7 +599,13 @@ elif not st.session_state.selected_staff:
         </div>
         <div class="main-title-banner">
             <p class="main-title-kicker">Workflow Intelligence</p>
-            <h1 class="main-title-text">Activity / Friction Log</h1>
+            <h1 class="main-title-text" aria-live="polite">
+                <span class="message-stage">
+                    <span class="hero-message hero-message-title">Activity / Friction Log</span>
+                    <span class="hero-message hero-message-activity">Remember to log each new activity</span>
+                    <span class="hero-message hero-message-break">End of day - record Break (End of day)</span>
+                </span>
+            </h1>
         </div>
         """
     )
@@ -523,7 +632,7 @@ if not st.session_state.selected_staff and not st.session_state.show_entries:
 
 if st.session_state.selected_staff and not st.session_state.show_entries:
     staff_member = st.session_state.selected_staff
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(LONDON_TZ).isoformat(timespec="seconds")
     version = st.session_state.form_version
 
     st.subheader(f":shimmer[Entry for {staff_member}]")
@@ -541,7 +650,7 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
         selected_activity = st.session_state.get(f"selected_activity_{version}")
         target_activity = st.session_state.get(f"activity_value_{version}", "")
 
-    with st.form(f"friction_form_{version}", clear_on_submit=True):
+    with st.form(f"friction_form_{version}", clear_on_submit=True, border=False):
         # st.text_input("Date & Time", value=now, disabled=True)
         st.markdown(f":material/date_range:`{now}`")
         st.caption(FIELD_HELP["recorded_at"])

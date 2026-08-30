@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 from streamlit_gsheets import GSheetsConnection
+from zoneinfo import ZoneInfo
 
 
 PIN = "5234"
@@ -18,6 +19,20 @@ COLUMNS = [
     "break_note",
 ]
 ENTRY_TYPES = ["Work activity", "Friction point", "Break"]
+LONDON_TZ = ZoneInfo("Europe/London")
+
+
+def parse_london_timestamp(value):
+    """Parse both legacy naive values and new timezone-aware log values."""
+    if pd.isna(value) or str(value).strip() == "":
+        return pd.NaT
+    try:
+        timestamp = pd.Timestamp(value)
+    except (TypeError, ValueError):
+        return pd.NaT
+    if timestamp.tzinfo is None:
+        return timestamp.tz_localize(LONDON_TZ)
+    return timestamp.tz_convert(LONDON_TZ)
 
 
 st.set_page_config(page_title="Activity dashboard", page_icon=":material/insights:", layout="wide")
@@ -71,7 +86,7 @@ if "activity_pin_error" not in st.session_state:
 if not st.session_state.activity_unlocked:
     st.title(":material/lock: Activity dashboard")
     st.write("Enter the PIN to view activity patterns across the team.")
-    with st.form("activity_pin_form"):
+    with st.form("activity_pin_form", border=False):
         st.text_input(
             "Dashboard PIN",
             type="password",
@@ -100,7 +115,10 @@ if log_df.empty:
     st.stop()
 
 log_df["activity_count"] = pd.to_numeric(log_df["activity_count"], errors="coerce").fillna(0)
-log_df["recorded_at"] = pd.to_datetime(log_df["recorded_at"], errors="coerce")
+parsed_recorded_at = log_df["recorded_at"].map(parse_london_timestamp)
+# Keep London wall-clock values for Altair so the chart does not reinterpret them
+# using the browser's timezone.
+log_df["recorded_at"] = pd.to_datetime(parsed_recorded_at).dt.tz_localize(None)
 log_df["staff_member"] = log_df["staff_member"].fillna("Unknown").astype(str).str.strip()
 log_df["entry_type"] = log_df["entry_type"].fillna("Unknown").astype(str).str.strip()
 log_df = log_df.dropna(subset=["recorded_at"])
@@ -139,16 +157,18 @@ friction = filtered[filtered["entry_type"] == "Friction point"]
 breaks = filtered[filtered["entry_type"] == "Break"]
 
 
-def build_job_gantt(work_entries: pd.DataFrame) -> pd.DataFrame:
-    """Estimate each job's span from its timestamp to the next same-staff event."""
-    jobs = work_entries[
-        work_entries["target_activity"].fillna("").astype(str).str.strip().ne("")
-    ].copy()
+def build_job_gantt(log_entries: pd.DataFrame) -> pd.DataFrame:
+    """Estimate work and break spans until the next event for the same staff member."""
+    events = log_entries.sort_values(["staff_member", "recorded_at"]).copy()
+    events["end"] = events.groupby("staff_member")["recorded_at"].shift(-1)
+    work_mask = (
+        events["entry_type"].eq("Work activity")
+        & events["target_activity"].fillna("").astype(str).str.strip().ne("")
+    )
+    jobs = events[work_mask | events["entry_type"].eq("Break")].copy()
     if jobs.empty:
         return pd.DataFrame()
 
-    jobs = jobs.sort_values(["staff_member", "recorded_at"])
-    jobs["end"] = jobs.groupby("staff_member")["recorded_at"].shift(-1)
     jobs["duration_minutes"] = (
         jobs["end"].sub(jobs["recorded_at"]).dt.total_seconds().div(60)
     )
@@ -159,7 +179,11 @@ def build_job_gantt(work_entries: pd.DataFrame) -> pd.DataFrame:
         & jobs["end"].dt.date.eq(jobs["recorded_at"].dt.date)
         & jobs["duration_minutes"].between(1, 8 * 60)
     ].copy()
-    jobs["job"] = jobs["target_activity"].astype(str).str.strip()
+    jobs["job"] = jobs["target_activity"].fillna("").astype(str).str.strip()
+    break_name = jobs["break_type"].fillna("").astype(str).str.strip()
+    jobs.loc[jobs["entry_type"].eq("Break"), "job"] = (
+        "Break" + break_name.where(break_name.eq(""), " · " + break_name)
+    )
     jobs["job_label"] = jobs["job"] + " · " + jobs["staff_member"]
     return jobs
 
@@ -179,22 +203,41 @@ activity_by_user = (
 if activity_by_user.empty:
     st.info("No work activity matches the selected filters.")
 else:
-    st.bar_chart(activity_by_user, x="staff_member", y="Work units", horizontal=True)
+    st.bar_chart(
+        activity_by_user,
+        x="staff_member",
+        y="Work units",
+        horizontal=True,
+        height=max(280, 56 * len(activity_by_user)),
+    )
 
-st.subheader("Time spent per job")
+st.subheader("Time spent per activity")
 st.caption(
-    "Estimated from each work entry until the next event logged by the same staff member. "
+    "Estimated from each work or break entry until the next event logged by the same staff member. "
     "Gaps longer than 8 hours and entries without a following timestamp are omitted."
 )
-job_gantt = build_job_gantt(work)
+job_gantt = build_job_gantt(filtered)
 if job_gantt.empty:
-    st.info("Not enough named work entries with consecutive timestamps to estimate job time.")
+    st.info("Not enough work or break entries with consecutive timestamps to estimate activity time.")
 else:
+    gantt_staff_options = sorted(job_gantt["staff_member"].unique())
+    selected_gantt_staff = st.selectbox(
+        "Staff member",
+        options=gantt_staff_options,
+        help="Choose which staff member's job timeline to display.",
+        key="gantt_staff_member",
+    )
+    job_gantt = job_gantt[job_gantt["staff_member"] == selected_gantt_staff].copy()
+
     gantt = (
         alt.Chart(job_gantt)
         .mark_bar(cornerRadius=3, height=18)
         .encode(
-            x=alt.X("recorded_at:T", title="Recorded time"),
+            x=alt.X(
+                "recorded_at:T",
+                title="Recorded time",
+                axis=alt.Axis(format="%H:%M"),
+            ),
             x2="end:T",
             y=alt.Y(
                 "job_label:N",
@@ -202,8 +245,16 @@ else:
                 sort="-x",
                 axis=alt.Axis(labelLimit=280),
             ),
-            color=alt.Color("staff_member:N", title="Staff member"),
+            color=alt.Color(
+                "entry_type:N",
+                title="Activity type",
+                scale=alt.Scale(
+                    domain=["Work activity", "Break"],
+                    range=["#243447", "#F59E0B"],
+                ),
+            ),
             tooltip=[
+                alt.Tooltip("entry_type:N", title="Activity type"),
                 alt.Tooltip("job:N", title="Job"),
                 alt.Tooltip("staff_member:N", title="Staff member"),
                 alt.Tooltip("recorded_at:T", title="Started", format="%d %b %Y, %H:%M"),
@@ -211,7 +262,8 @@ else:
                 alt.Tooltip("duration_minutes:Q", title="Estimated minutes", format=".1f"),
             ],
         )
-        .properties(height=max(180, min(620, 34 * len(job_gantt))))
+        # Give every activity row enough vertical space for its y-axis label.
+        .properties(height=max(240, 42 * job_gantt["job_label"].nunique()))
     )
     st.altair_chart(gantt)
 
