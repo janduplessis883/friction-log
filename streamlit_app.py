@@ -271,7 +271,7 @@ def render_activity_selector(version: int) -> None:
         "**Activity**",
         options=ACTIVITY_OPTIONS,
         index=None,
-        placeholder="Choose an activity or type your own",
+        placeholder="Choose an activity or Select 'Other' and describe your own.",
         accept_new_options=True,
         help=FIELD_HELP["target_activity"],
         key=f"target_activity_{version}",

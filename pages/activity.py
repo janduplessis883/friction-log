@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pandas as pd
 import streamlit as st
 import altair as alt
@@ -133,7 +135,14 @@ with st.sidebar:
     selected_staff = st.multiselect("Staff", staff_options, default=staff_options)
     min_date = log_df["recorded_at"].dt.date.min()
     max_date = log_df["recorded_at"].dt.date.max()
-    selected_dates = st.date_input("Date range", value=(min_date, max_date))
+    selected_dates = st.slider(
+        "Date range",
+        min_value=min_date,
+        max_value=max_date,
+        value=(min_date, max_date),
+        format="DD/MM/YYYY",
+        step=timedelta(days=1),
+    )
     if st.button("Lock dashboard", icon=":material/lock:"):
         st.session_state.activity_unlocked = False
         st.rerun()
@@ -142,10 +151,7 @@ if not selected_staff:
     st.warning("Select at least one staff member to view the charts.")
     st.stop()
 
-if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
-    start_date, end_date = selected_dates
-else:
-    start_date = end_date = selected_dates
+start_date, end_date = selected_dates
 
 filtered = log_df[
     log_df["staff_member"].isin(selected_staff)
