@@ -14,6 +14,7 @@ STAFF_MEMBERS = [
     "Selina",
     "Helen",
     "Zoe",
+    "Hunter",
 
 ]
 
