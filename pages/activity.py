@@ -374,11 +374,16 @@ else:
         )
 
     if user_metric_rows:
-        analysis_expander.caption(
-            "Median time per unit is the middle per-unit time, so lower values generally indicate faster throughput. "
-            "Estimated work time is the total inferred time spent working, while Total units is completed volume. "
-            "Context switches count changes between consecutive work categories; lower values may indicate fewer interruptions. "
-            "Consistency (CV %) measures variation relative to average time per unit; lower percentages indicate more consistent timings."
+        analysis_expander.markdown(
+            """
+            **How to read these metrics**
+
+            - **Median time per unit:** The typical number of minutes needed to complete one unit. Lower values generally indicate faster throughput.
+            - **Estimated work time:** The total working time inferred from the gaps between log entries. Treat this as an estimate, not an exact stopwatch measurement.
+            - **Total units:** The total number of items recorded as completed.
+            - **Context switches:** The number of changes between consecutive work categories. Lower values may indicate fewer interruptions, although some roles naturally require more switching.
+            - **Consistency (CV %):** How much time per unit varies relative to the average. Lower percentages indicate more consistent timings; higher percentages indicate greater variation.
+            """
         )
         analysis_expander.dataframe(
             pd.DataFrame(user_metric_rows).sort_values("User"),
