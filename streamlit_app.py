@@ -34,6 +34,8 @@ COLUMNS = [
 ENTRY_TYPES = ["Work activity", "Friction point", "Break"]
 LONDON_TZ = ZoneInfo("Europe/London")
 ACTIVITY_OPTIONS = [
+    "2WW Referrals",
+    "2WW Tracking",
     "Accounts Admin",
     "Answering Telephone Calls",
     "Annual Leave request",
@@ -54,6 +56,7 @@ ACTIVITY_OPTIONS = [
     "Loading New Appointments",
     "Managing SystmOne Tasks",
     "Managing Test Results",
+    "Medication Change Letters to Pts",
     "Meeting Preparation",
     "Meetings and Team Coordination",
     "Moving Patient Appointments",
