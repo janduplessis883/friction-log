@@ -32,6 +32,7 @@ COLUMNS = [
 
 ENTRY_TYPES = ["Work activity", "Friction point", "Break"]
 LONDON_TZ = ZoneInfo("Europe/London")
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJsxuSaTb0kM5iIpCm82Jyy09Vpu19UX_Rkbe1uNWIs/edit?usp=sharing"
 ACTIVITY_OPTIONS = [
     "2WW Referrals",
     "2WW Tracking",
@@ -39,10 +40,7 @@ ACTIVITY_OPTIONS = [
     "Administration",
     "Annual Leave request",
     "Answering Telephone Calls",
-    "Basic Life Support - Level 1 - e-Learning",
-    "Basic Life Support - Level 2: Adult - e-Learning",
-    "Basic Life Support - Level 2: Newborn - e-Learning",
-    "Basic Life Support - Level 2: Paediatric - e-Learning",
+    "Automation Python",
     "Booking Appointments",
     "Cancelling Clinics",
     "Cancelling Individual Patients",
@@ -70,12 +68,12 @@ ACTIVITY_OPTIONS = [
     "Loading New Appointments",
     "Managing SystmOne Tasks",
     "Managing Test Results",
+    "Mandatory Training - e-Learning",
     "Medication Change Letters to Pts",
     "Meeting Preparation",
     "Meetings and Team Coordination",
     "Moving Patient Appointments",
     "Opening Letters",
-    "Other SystmOne Tasks",
     "Paying Bills",
     "PPG Meeting Planning",
     "Prescription Administration",
@@ -99,6 +97,7 @@ ACTIVITY_OPTIONS = [
     "Staff Training and Onboarding",
     "Stamping Envelopes",
     "SystmOne Searches",
+    "SystmOne Tasks",
     "Targets Admin",
     "Updating or Cancelling Appointments",
     "Updating Patient Records",
@@ -108,10 +107,8 @@ BREAK_TYPES = [
     "Lunch",
     "Scheduled break",
     "Unscheduled break",
-    "Personal break",
     "Comfort break",
     "End of working day",
-    "Other",
 ]
 
 BUTTON_ROW_PATTERN = [4, 3]
@@ -197,6 +194,54 @@ def read_log() -> pd.DataFrame:
     )
 
     return data[COLUMNS]
+
+
+def render_staff_statuses(log_df: pd.DataFrame) -> None:
+    """Show each staff member's status from their most recent log entry."""
+    latest_by_staff = {}
+    if not log_df.empty:
+        dated_log = log_df.copy()
+        dated_log["_recorded_at"] = pd.to_datetime(
+            dated_log["recorded_at"], errors="coerce", utc=True
+        )
+        dated_log = dated_log.sort_values("_recorded_at", na_position="first")
+        latest_by_staff = dated_log.drop_duplicates(
+            subset="staff_member", keep="last"
+        ).set_index("staff_member").to_dict("index")
+
+    _, status_column, _ = st.columns([0.7, 5, 0.7])
+    with status_column:
+        with st.container(
+            horizontal=True,
+            horizontal_alignment="center",
+            gap="small",
+        ):
+            for staff_member in STAFF_MEMBERS:
+                latest_entry = latest_by_staff.get(staff_member)
+                if latest_entry is None:
+                    st.badge(
+                        staff_member,
+                        color="gray",
+                        help="No entry recorded yet.",
+                    )
+                    continue
+
+                entry_type = str(latest_entry.get("entry_type", "")).strip()
+                break_type = str(latest_entry.get("break_type", "")).strip()
+                break_note = str(latest_entry.get("break_note", "")).strip()
+                end_of_day = "end of working day" in f"{break_type} {break_note}".casefold()
+
+                if entry_type == "Break" and end_of_day:
+                    color = "gray"
+                    status = "End of working day"
+                elif entry_type == "Break":
+                    color = "yellow"
+                    status = "On a break"
+                else:
+                    color = "green"
+                    status = "Working"
+
+                st.badge(staff_member, color=color, help=status)
 
 
 def append_log_entry(entry: dict) -> None:
@@ -368,6 +413,12 @@ st.sidebar.metric(
 st.sidebar.divider()
 st.sidebar.markdown("**Google Sheet**")
 st.sidebar.caption("Uses the private `gsheets` connection from `.streamlit/secrets.toml`.")
+st.sidebar.link_button(
+    "Open Google Sheet",
+    GOOGLE_SHEET_URL,
+    icon=":material/table_view:",
+    width="stretch",
+)
 st.sidebar.markdown("**Staff**")
 st.sidebar.caption(f"{len(STAFF_MEMBERS)} staff members configured.")
 
@@ -636,6 +687,7 @@ elif not st.session_state.selected_staff:
         </div>
         """
     )
+    render_staff_statuses(log_df)
 
 
 

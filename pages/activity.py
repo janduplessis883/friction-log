@@ -190,7 +190,7 @@ def build_job_gantt(log_entries: pd.DataFrame) -> pd.DataFrame:
     jobs.loc[jobs["entry_type"].eq("Break"), "job"] = (
         "Break" + break_name.where(break_name.eq(""), " · " + break_name)
     )
-    jobs["job_label"] = jobs["job"] + " · " + jobs["staff_member"]
+    jobs["job_label"] = jobs["job"]
     return jobs
 
 with st.container(horizontal=True):
@@ -217,23 +217,31 @@ else:
         height=max(280, 56 * len(activity_by_user)),
     )
 
-st.subheader("Time spent per activity")
-st.caption(
+gantt_expander = st.expander(":material/timeline: Time spent per activity", expanded=True)
+gantt_expander.caption(
     "Estimated from each work or break entry until the next event logged by the same staff member. "
     "Gaps longer than 8 hours and entries without a following timestamp are omitted."
 )
-job_gantt = build_job_gantt(filtered)
-if job_gantt.empty:
-    st.info("Not enough work or break entries with consecutive timestamps to estimate activity time.")
+all_job_gantt = build_job_gantt(filtered)
+
+analysis_expander = st.expander(":material/analytics: User analysis", expanded=False)
+daily_expander = st.expander(":material/trending_up: Daily trends and activity", expanded=False)
+if all_job_gantt.empty:
+    gantt_expander.info("Not enough work or break entries with consecutive timestamps to estimate activity time.")
 else:
-    gantt_staff_options = sorted(job_gantt["staff_member"].unique())
-    selected_gantt_staff = st.selectbox(
+    all_job_gantt["_time_per_unit"] = all_job_gantt["duration_minutes"].div(
+        all_job_gantt["activity_count"].where(all_job_gantt["activity_count"].gt(0))
+    )
+    gantt_staff_options = sorted(all_job_gantt["staff_member"].unique())
+    selected_gantt_staff = gantt_expander.selectbox(
         "Staff member",
         options=gantt_staff_options,
         help="Choose which staff member's job timeline to display.",
         key="gantt_staff_member",
     )
-    job_gantt = job_gantt[job_gantt["staff_member"] == selected_gantt_staff].copy()
+    job_gantt = all_job_gantt[
+        all_job_gantt["staff_member"] == selected_gantt_staff
+    ].copy()
 
     gantt = (
         alt.Chart(job_gantt)
@@ -247,9 +255,15 @@ else:
             x2="end:T",
             y=alt.Y(
                 "job_label:N",
-                title="Job · staff member",
+                title=None,
                 sort="-x",
-                axis=alt.Axis(labelLimit=280),
+                axis=alt.Axis(
+                    labelLimit=280,
+                    grid=True,
+                    gridColor="#ECEFF1",
+                    gridOpacity=0.85,
+                    gridWidth=1,
+                ),
             ),
             color=alt.Color(
                 "entry_type:N",
@@ -271,9 +285,151 @@ else:
         # Give every activity row enough vertical space for its y-axis label.
         .properties(height=max(240, 42 * job_gantt["job_label"].nunique()))
     )
-    st.altair_chart(gantt)
+    gantt_expander.altair_chart(gantt)
 
-st.subheader("Daily work activity")
+    category_summary = (
+        job_gantt.groupby("job", as_index=False)
+        .agg(
+            total_time_minutes=("duration_minutes", "sum"),
+            total_units=("activity_count", "sum"),
+        )
+        .rename(
+            columns={
+                "job": "Activity",
+                "total_time_minutes": "Total Time (min)",
+                "total_units": "Total units",
+            }
+        )
+    )
+    category_summary["Total Time (min)"] = category_summary[
+        "Total Time (min)"
+    ].round(1)
+    category_summary["Total Time (hrs)"] = (
+        category_summary["Total Time (min)"].div(60).round(2)
+    )
+    units = category_summary["Total units"].where(
+        category_summary["Total units"].gt(0)
+    )
+    category_summary["Time per unit (min)"] = (
+        category_summary["Total Time (min)"].div(units).round(1)
+    )
+    time_per_unit_trends = job_gantt.groupby("job")["_time_per_unit"].apply(
+        lambda values: values.dropna().round(1).tolist()
+    )
+    category_summary["Time per unit trend"] = category_summary["Activity"].map(
+        time_per_unit_trends
+    ).apply(lambda values: values if isinstance(values, list) else [])
+    category_summary = category_summary[
+        [
+            "Activity",
+            "Total Time (min)",
+            "Total Time (hrs)",
+            "Total units",
+            "Time per unit (min)",
+            "Time per unit trend",
+        ]
+    ].sort_values("Activity", ascending=True)
+    gantt_expander.dataframe(
+        category_summary,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Time per unit trend": st.column_config.LineChartColumn(
+                "Time per unit trend (min)",
+                width="medium",
+                help="Per-entry time per unit for this activity, in minutes.",
+                y_min=0,
+            )
+        },
+    )
+
+    work_jobs = all_job_gantt[all_job_gantt["entry_type"].eq("Work activity")].copy()
+    user_metric_rows = []
+    for staff_member, user_jobs in work_jobs.groupby("staff_member"):
+        per_unit = user_jobs["_time_per_unit"].dropna()
+        mean_per_unit = per_unit.mean()
+        consistency = (
+            round(per_unit.std(ddof=0) / mean_per_unit * 100, 1)
+            if len(per_unit) > 1 and mean_per_unit > 0
+            else None
+        )
+        ordered_jobs = user_jobs.sort_values("recorded_at")
+        context_switches = max(
+            0,
+            int(ordered_jobs["job"].ne(ordered_jobs["job"].shift()).sum() - 1),
+        )
+        user_metric_rows.append(
+            {
+                "User": staff_member,
+                "Median time per unit (min)": round(per_unit.median(), 1)
+                if not per_unit.empty
+                else None,
+                "Estimated work time (hrs)": round(
+                    user_jobs["duration_minutes"].sum() / 60, 2
+                ),
+                "Total units": int(user_jobs["activity_count"].sum()),
+                "Context switches": context_switches,
+                "Consistency (CV %)": consistency,
+            }
+        )
+
+    if user_metric_rows:
+        analysis_expander.caption(
+            "Median time per unit is the middle per-unit time, so lower values generally indicate faster throughput. "
+            "Estimated work time is the total inferred time spent working, while Total units is completed volume. "
+            "Context switches count changes between consecutive work categories; lower values may indicate fewer interruptions. "
+            "Consistency (CV %) measures variation relative to average time per unit; lower percentages indicate more consistent timings."
+        )
+        analysis_expander.dataframe(
+            pd.DataFrame(user_metric_rows).sort_values("User"),
+            width="stretch",
+            hide_index=True,
+        )
+    else:
+        analysis_expander.info("No qualifying work activities are available for user analysis.")
+
+    time_distribution = (
+        work_jobs.groupby(["staff_member", "job"], as_index=False)["duration_minutes"]
+        .sum()
+        .rename(
+            columns={
+                "staff_member": "User",
+                "job": "Activity",
+                "duration_minutes": "Time (min)",
+            }
+        )
+    )
+    time_distribution["Time distribution (%)"] = (
+        time_distribution["Time (min)"]
+        / time_distribution.groupby("User")["Time (min)"].transform("sum")
+        * 100
+    ).round(1)
+    if time_distribution.empty:
+        analysis_expander.info("No time distribution is available for the selected range.")
+    else:
+        analysis_expander.caption(
+            "Time (min) is the estimated time spent on each activity. Time distribution (%) is that activity's share of the user's estimated work time; higher percentages show where most time is being spent."
+        )
+        analysis_expander.dataframe(
+            time_distribution.sort_values(
+                ["User", "Time (min)"], ascending=[True, False]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+        daily_user_time = (
+            work_jobs.assign(Date=work_jobs["recorded_at"].dt.date)
+            .groupby(["Date", "staff_member"])["duration_minutes"]
+            .sum()
+            .unstack(fill_value=0)
+            .sort_index()
+        )
+        daily_expander.caption(
+            "Daily trend shows each user's estimated work time by day. Look for sustained changes or unusual spikes rather than judging a single day."
+        )
+        daily_expander.line_chart(daily_user_time, y_label="Estimated work time (minutes)")
+
 daily_activity = (
     work.assign(day=work["recorded_at"].dt.date)
     .groupby(["day", "staff_member"], as_index=False)["activity_count"]
@@ -283,9 +439,12 @@ daily_activity = (
     .sort_index()
 )
 if daily_activity.empty:
-    st.info("No daily work activity matches the selected filters.")
+    daily_expander.info("No daily work activity matches the selected filters.")
 else:
-    st.line_chart(daily_activity)
+    daily_expander.caption(
+        "Daily activity shows completed units by day and user. Compare this with the time trend to distinguish higher workload from slower throughput."
+    )
+    daily_expander.line_chart(daily_activity, y_label="Completed units")
 
 st.subheader("Entries by staff member")
 entry_summary = (
