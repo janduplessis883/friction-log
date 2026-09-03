@@ -48,6 +48,7 @@ ACTIVITY_OPTIONS = [
     "Complaints Administration",
     "CQRS",
     "Dealing with Letters",
+    "Dictation",
     "District Nurse Coordination",
     "ECS Training",
     "Email Administration",
@@ -98,6 +99,7 @@ ACTIVITY_OPTIONS = [
     "Stamping Envelopes",
     "SystmOne Searches",
     "SystmOne Tasks",
+    "Sympathy Letter",
     "Targets Admin",
     "Updating or Cancelling Appointments",
     "Updating Patient Records",
@@ -106,8 +108,9 @@ ACTIVITY_OPTIONS.append("Other")
 BREAK_TYPES = [
     "Lunch",
     "Scheduled break",
-    "Unscheduled break",
+
     "Comfort break",
+
     "End of working day",
 ]
 
