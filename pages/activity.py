@@ -282,8 +282,8 @@ else:
                 alt.Tooltip("duration_minutes:Q", title="Estimated minutes", format=".1f"),
             ],
         )
-        # Give every activity row enough vertical space for its y-axis label.
-        .properties(height=max(240, 42 * job_gantt["job_label"].nunique()))
+        # Keep activity rows compact so the y-axis labels stay close together.
+        .properties(height=max(165, 26 * job_gantt["job_label"].nunique()))
     )
     gantt_expander.altair_chart(gantt)
 
@@ -459,3 +459,75 @@ entry_summary = (
     .reindex(columns=ENTRY_TYPES, fill_value=0)
 )
 st.bar_chart(entry_summary)
+
+friction_expander = st.expander(
+    ":material/report_problem: Friction points to consider",
+    expanded=True,
+)
+friction_details = friction[
+    [
+        "recorded_at",
+        "staff_member",
+        "target_activity",
+        "friction_point",
+        "delay_minutes",
+        "suggested_improvement",
+    ]
+].copy()
+friction_details["friction_point"] = friction_details["friction_point"].fillna("").astype(str).str.strip()
+friction_details = friction_details[friction_details["friction_point"].ne("")]
+
+if friction_details.empty:
+    friction_expander.info("No friction points match the selected filters.")
+else:
+    friction_details["delay_minutes"] = pd.to_numeric(
+        friction_details["delay_minutes"], errors="coerce"
+    ).fillna(0)
+    friction_details["potential_hours_saved"] = (
+        friction_details["delay_minutes"] / 60
+    ).round(2)
+    friction_details = friction_details.sort_values(
+        ["delay_minutes", "recorded_at"], ascending=[False, False]
+    ).rename(
+        columns={
+            "recorded_at": "Submitted at",
+            "staff_member": "Submitted by",
+            "target_activity": "Activity",
+            "friction_point": "Friction point",
+            "delay_minutes": "Delay (mins)",
+            "potential_hours_saved": "Potential hours saved",
+            "suggested_improvement": "Proposed solution",
+        }
+    )
+    friction_expander.caption(
+        "Potential hours saved assumes the proposed solution removes the recorded delay; "
+        "it is an estimate for prioritisation, not a measured saving."
+    )
+    friction_expander.dataframe(
+        friction_details[
+            [
+                "Friction point",
+                "Activity",
+                "Submitted by",
+                "Submitted at",
+                "Delay (mins)",
+                "Potential hours saved",
+                "Proposed solution",
+            ]
+        ],
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Potential hours saved": st.column_config.NumberColumn(
+                format="%.2f hrs"
+            )
+        },
+    )
+    friction_expander.download_button(
+        "Download friction points as CSV",
+        data=friction_details.to_csv(index=False).encode("utf-8"),
+        file_name="friction_points.csv",
+        mime="text/csv",
+        icon=":material/download:",
+        width="content",
+    )
