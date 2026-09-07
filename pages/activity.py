@@ -135,7 +135,7 @@ with st.sidebar:
     selected_staff = st.multiselect("Staff", staff_options, default=staff_options)
     min_date = log_df["recorded_at"].dt.date.min()
     max_date = log_df["recorded_at"].dt.date.max()
-    selected_dates = st.slider(
+    selected_dates = (min_date, max_date) if min_date == max_date else st.slider(
         "Date range",
         min_value=min_date,
         max_value=max_date,
@@ -223,6 +223,96 @@ gantt_expander.caption(
     "Gaps longer than 8 hours and entries without a following timestamp are omitted."
 )
 all_job_gantt = build_job_gantt(filtered)
+
+st.subheader("Working hours by user and day")
+st.caption(
+    "Estimated working hours exclude breaks and use the same time spans as the activity timeline. "
+    "Only same-day gaps of 1 minute to 8 hours are included. "
+    "Grey cells mean no working-time estimate is available."
+)
+if all_job_gantt.empty or not all_job_gantt["entry_type"].eq("Work activity").any():
+    st.info("Not enough consecutive work timestamps to build the heatmaps for these filters.")
+else:
+    timed_work = all_job_gantt[all_job_gantt["entry_type"].eq("Work activity")]
+    daily_hours = (
+        timed_work.assign(day=timed_work["recorded_at"].dt.normalize())
+        .groupby(["staff_member", "day"])["duration_minutes"]
+        .sum()
+        .div(60)
+        .rename("working_hours")
+    )
+    daily_units = (
+        work.assign(day=work["recorded_at"].dt.normalize())
+        .groupby(["staff_member", "day"])["activity_count"]
+        .sum()
+        .rename("work_units")
+    )
+    daily_grid = pd.MultiIndex.from_product(
+        [sorted(selected_staff), pd.date_range(start_date, end_date)],
+        names=["staff_member", "day"],
+    )
+    heatmap_data = pd.concat([daily_hours, daily_units], axis=1).reindex(daily_grid)
+    heatmap_data["work_units"] = heatmap_data["work_units"].fillna(0)
+    heatmap_data["hours_per_unit"] = heatmap_data["working_hours"].div(
+        heatmap_data["work_units"].where(heatmap_data["work_units"].gt(0))
+    )
+    heatmap_data = heatmap_data.reset_index()
+
+    for metric, title, scheme in [
+        ("working_hours", "Estimated working hours", "blues"),
+        ("hours_per_unit", "Working hours per unit of work", "oranges"),
+    ]:
+        if metric == "hours_per_unit":
+            st.subheader(title)
+            st.caption(
+                "Each cell is the user's total estimated working hours for that day divided by "
+                "all work units recorded that day, including entries without a time estimate. "
+                "Grey cells mean hours are unavailable or there are no positive work units."
+            )
+        heatmap = (
+            alt.Chart(heatmap_data)
+            .mark_rect(stroke="white", strokeWidth=1)
+            .encode(
+                x=alt.X("day:O", title="Day", sort="ascending",
+                        axis=alt.Axis(labelExpr="timeFormat(toDate(datum.value), '%d %b %Y')",
+                                      labelAngle=-45)),
+                y=alt.Y(
+                    "staff_member:N", title="User", sort=sorted(selected_staff),
+                    axis=alt.Axis(labelOverlap=False, labelLimit=240),
+                ),
+                color=alt.condition(
+                    f"isValid(datum.{metric})",
+                    alt.Color(f"{metric}:Q", title=title,
+                              scale=alt.Scale(scheme=scheme, zero=True)),
+                    alt.value("#E5E7EB"),
+                ),
+                tooltip=[
+                    alt.Tooltip("staff_member:N", title="User"),
+                    alt.Tooltip("day:T", title="Day", format="%d %b %Y"),
+                    alt.Tooltip("working_hours:Q", title="Estimated working hours", format=".2f"),
+                    alt.Tooltip("work_units:Q", title="Recorded work units", format=",.0f"),
+                    alt.Tooltip("hours_per_unit:Q", title="Hours per unit", format=".3f"),
+                ],
+            )
+            .properties(height=max(200, 48 * len(selected_staff)))
+        )
+        label_threshold = heatmap_data[metric].max() * 0.6
+        labels = (
+            heatmap.transform_filter(f"isValid(datum.{metric})")
+            .mark_text(fontSize=12, fontWeight="bold")
+            .encode(
+                text=alt.Text(
+                    f"{metric}:Q",
+                    format=".2f" if metric == "working_hours" else ".3f",
+                ),
+                color=alt.condition(
+                    alt.datum[metric] > (label_threshold if pd.notna(label_threshold) else 0),
+                    alt.value("white"),
+                    alt.value("#243447"),
+                ),
+            )
+        )
+        st.altair_chart(heatmap + labels)
 
 analysis_expander = st.expander(":material/analytics: User analysis", expanded=False)
 daily_expander = st.expander(":material/trending_up: Daily trends and activity", expanded=False)

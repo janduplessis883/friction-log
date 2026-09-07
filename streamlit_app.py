@@ -133,7 +133,7 @@ FIELD_HELP = {
     ),
     "delay_minutes": (
         "Estimate the extra time this caused. Use 0 minutes if it was annoying "
-        "but did not noticeably delay the task."
+        "but did not noticeably delay the task. Choose Not sure if you cannot estimate it."
     ),
     "suggested_improvement": (
         "Suggest what would make this easier next time. This can be a process "
@@ -170,7 +170,7 @@ def empty_log() -> pd.DataFrame:
     return pd.DataFrame(columns=COLUMNS)
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=20)
 def read_log() -> pd.DataFrame:
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
@@ -199,8 +199,10 @@ def read_log() -> pd.DataFrame:
     return data[COLUMNS]
 
 
-def render_staff_statuses(log_df: pd.DataFrame) -> None:
+@st.fragment(run_every="20s")
+def render_staff_statuses() -> None:
     """Show each staff member's status from their most recent log entry."""
+    log_df = read_log()
     latest_by_staff = {}
     if not log_df.empty:
         dated_log = log_df.copy()
@@ -504,7 +506,7 @@ elif not st.session_state.selected_staff:
                 box-shadow: 0 26px 42px rgba(12, 23, 34, 0.14);
                 color: #ffffff;
                 margin-bottom: 1.6rem;
-                padding: 2rem 2rem;
+                padding: 1rem 2rem;
                 position: relative;
                 transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
                 z-index: 3;
@@ -690,7 +692,7 @@ elif not st.session_state.selected_staff:
         </div>
         """
     )
-    render_staff_statuses(log_df)
+    render_staff_statuses()
 
 
 
@@ -763,14 +765,17 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
             )
             delay = st.selectbox(
                 "**Delay time**",
-                options=list(range(0, 125, 5)),
-                format_func=lambda minutes: f"{minutes} mins",
-                index=3,
+                options=[*range(0, 125, 5), "Not sure"],
+                format_func=lambda minutes: (
+                    minutes if minutes == "Not sure" else f"{minutes} mins"
+                ),
+                index=None,
+                placeholder="Choose a delay or Not sure",
                 help=FIELD_HELP["delay_minutes"],
                 key=f"delay_{version}",
             )
             suggested_improvement = st.text_area(
-                "**Suggested improvement**",
+                "**Suggested improvement (optional)**",
                 placeholder="Separate pages in document management before filling.",
                 help=FIELD_HELP["suggested_improvement"],
                 key=f"suggested_improvement_{version}",
@@ -826,7 +831,6 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
                 **(
                     {
                         "Obstacle / Friction Point": friction_point,
-                        "Suggested Improvement": suggested_improvement,
                     }
                     if entry_type == "Friction point"
                     else {}
@@ -834,6 +838,8 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
             }.items()
             if not value.strip()
         ]
+        if entry_type == "Friction point" and delay is None:
+            missing_fields.append("Delay time (choose an estimate or Not sure)")
 
         if missing_fields:
             st.error(f"Please complete: {', '.join(missing_fields)}.")
@@ -847,7 +853,7 @@ if st.session_state.selected_staff and not st.session_state.show_entries:
                         "target_activity": target_activity.strip(),
                         "activity_count": int(activity_count),
                         "friction_point": friction_point.strip(),
-                        "delay_minutes": int(delay),
+                        "delay_minutes": delay if delay == "Not sure" else int(delay),
                         "suggested_improvement": suggested_improvement.strip(),
                         "break_type": break_type,
                         "break_note": break_note.strip(),

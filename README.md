@@ -23,12 +23,14 @@ Each row contains:
 | `target_activity` | Selected activity category or custom activity |
 | `activity_count` | Number of units completed |
 | `friction_point` | Description of the obstacle, when applicable |
-| `delay_minutes` | Estimated delay caused by friction |
-| `suggested_improvement` | Proposed process or system improvement |
+| `delay_minutes` | Explicitly selected delay estimate, or `Not sure` when unknown; no default selection |
+| `suggested_improvement` | Optional proposed process or system improvement |
 | `break_type` | Type of break, when applicable |
 | `break_note` | Optional break context or comment |
 
 New entries are appended to the Google Sheet as individual rows. The app only rewrites the sheet when it detects that the sheet headers or legacy layout need migration.
+
+Friction entries require an obstacle description and an explicit delay choice. Staff can choose `Not sure` and leave the suggested improvement blank. Unknown delays are excluded from the total delay minutes; they are not recorded as zero-minute estimates.
 
 ## Dashboard analysis
 
